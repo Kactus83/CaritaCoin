@@ -389,12 +389,12 @@ contract CARITASCOIN is IBEP20, Auth {
     mapping (address => bool) isTxLimitExempt;
     mapping (address => bool) isDividendExempt;
 
-    uint256 liquidityFee = 300;
-    uint256 buybackFee = 300;
-    uint256 reflectionFee = 300;
-    uint256 charityFee = 200;
-    uint256 marketingFee = 100;
-    uint256 totalFee = 1200;
+    uint256 liquidityFee = 150;
+    uint256 buybackFee = 150;
+    uint256 reflectionFee = 200;
+    uint256 charityFee = 150;
+    uint256 marketingFee = 50;
+    uint256 totalFee = 700;
     uint256 feeDenominator = 10000;
 
     address public autoLiquidityReceiver;
@@ -448,7 +448,7 @@ contract CARITASCOIN is IBEP20, Auth {
 
         autoLiquidityReceiver = msg.sender;
         marketingFeeReceiver = 0xC336C970e5fA27D1F72e4e9939Ee09DAe68Ed97b;
-        charityFeeReceiver = 0x5D8FD08356CF3C2aC3fBEC29826731F288Df454F;
+        charityFeeReceiver = address(owner);
 
         _balances[msg.sender] = _totalSupply;
         emit Transfer(address(0), msg.sender, _totalSupply);
