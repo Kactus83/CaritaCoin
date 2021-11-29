@@ -94,7 +94,7 @@ contract caritasFirstSale {
         tokenAmountToSell,
         0,
         0,
-        address(this),
+        0x0000000000000000000000000000000000000000,
         block.timestamp + 360
         );
     }
