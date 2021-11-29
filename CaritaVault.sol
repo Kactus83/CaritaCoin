@@ -17,11 +17,15 @@ contract CharityVault {
         _;
     }
 
+    function transferOwnership(address newOwner) public onlyOwner {
+        owner = newOwner;
+    }
+
     function CharityLock(
         address _creator,
         address _owner,
         uint256 _unlockDate
-    ) public {
+    ) public onlyOwner {
         creator = _creator;
         owner = _owner;
         unlockDate = _unlockDate;
