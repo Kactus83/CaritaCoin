@@ -19,9 +19,22 @@ pragma solidity 0.8.10;
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 
+import "./libraries/SafeMath.sol";
 
-contract TEST5CARITACOIN is IBEP20, UserManagement {
+import "./UserManagement.sol";
+import "./PreSale.sol";
+import "./DividendDistributor.sol";
+
+import "./interfaces/IDEXFactory+IDEXRouter.sol";
+import "./interfaces/IBEP20.sol";
+import "./interfaces/IUserManagement.sol";
+import "./interfaces/IDividendDistributor.sol";
+
+
+contract CARITEST1 is IBEP20 {
     using SafeMath for uint256;
+
+    // Constant Addresses & Parameters
 
     address BUSD = 0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7;
     address WBNB = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
@@ -30,8 +43,10 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
 
     uint256 constant private MAX_INT = 2**256 - 1;
 
-    string constant _name = "CARITAS COIN  test5";
-    string constant _symbol = "555CRTS";
+    // Coin Parameters
+
+    string constant _name = "CARITEST1";
+    string constant _symbol = "CARITEST1";
     uint8 constant _decimals = 18;
 
     uint256 _totalSupply = 500000000000000 * (10 ** _decimals);
@@ -79,6 +94,8 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
 
     DividendDistributor distributor;
     PreSale preSales;
+    UserManagement userManagement;
+
     uint256 distributorGas = 500000;
     uint256 feesGas = 70000;
 
@@ -88,13 +105,16 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
     bool inSwap;
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
-    constructor () UserManagement(msg.sender, address(this)) {
+    // Initialize Parameters
+
+    constructor () {
         router = IDEXRouter(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
         pair = IDEXFactory(router.factory()).createPair(WBNB, address(this));
         _allowances[address(this)][address(router)] = type(uint128).max;
 
         distributor = new DividendDistributor(address(router));
         preSales = new PreSale(address(this), WBNB, pair, address(router));
+        userManagement = new UserManagement(msg.sender, address(this));
 
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;
@@ -119,10 +139,14 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
         emit Transfer(address(0), address(preSales), preSalesBalance);
     }
 
+    // Initialize Interfaces
+
     IPreSale iPreSaleConfig = IPreSale(address(preSales));
+    IUserManagement iUserManagement = IUserManagement(address(userManagement));
 
-    receive() external payable { }
+    // Override IBEP...... why ????
 
+    receive() external payable {}
     function totalSupply() external view override returns (uint256) { return _totalSupply; }
     function decimals() external pure override returns (uint8) { return _decimals; }
     function symbol() external pure override returns (string memory) { return _symbol; }
@@ -148,7 +172,6 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
         if(_allowances[sender][msg.sender] != type(uint128).max){
             _allowances[sender][msg.sender] = _allowances[sender][msg.sender].sub(amount, "Insufficient Allowance");
         }
-
         return _transferFrom(sender, recipient, amount);
     }
 
@@ -181,6 +204,12 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
         _balances[recipient] = _balances[recipient].add(amount);
         emit Transfer(sender, recipient, amount);
         return true;
+    }
+
+    // Internal Utility Functions
+
+    function launch() internal {
+        launchedAt = block.number;
     }
 
     function checkTxLimit(address sender, uint256 amount) internal view {
@@ -273,18 +302,6 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
             && address(this).balance >= autoBuybackAmount;
     }
 
-    function triggerLoveBuyback(uint256 amount, bool triggerBuybackMultiplier) external authorized {
-        buyTokens(amount, DEAD);
-        if(triggerBuybackMultiplier){
-            buybackMultiplierTriggeredAt = block.timestamp;
-            emit BuybackMultiplierActive(buybackMultiplierLength);
-        }
-    }
-    
-    function clearBuybackMultiplier() external authorized {
-        buybackMultiplierTriggeredAt = 0;
-    }
-
     function triggerAutoBuyback() internal {
         buyTokens(autoBuybackAmount, DEAD);
         autoBuybackBlockLast = block.number;
@@ -304,6 +321,21 @@ contract TEST5CARITACOIN is IBEP20, UserManagement {
             block.timestamp
         );
     }
+
+    // BuyBack Admin Functions
+
+    function triggerLoveBuyback(uint256 amount, bool triggerBuybackMultiplier) external authorized {
+        buyTokens(amount, DEAD);
+        if(triggerBuybackMultiplier){
+            buybackMultiplierTriggeredAt = block.timestamp;
+            emit BuybackMultiplierActive(buybackMultiplierLength);
+        }
+    }
+    
+    function clearBuybackMultiplier() external authorized {
+        buybackMultiplierTriggeredAt = 0;
+    }
+
 function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, uint256 _period) external authorized {
         autoBuybackEnabled = _enabled;
         autoBuybackCap = _cap;
@@ -320,13 +352,26 @@ function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, 
         buybackMultiplierLength = length;
     }
 
+    // View Functions
+
     function launched() internal view returns (bool) {
         return launchedAt != 0;
     }
 
-    function launch() internal {
-        launchedAt = block.number;
+    function getCirculatingSupply() public view returns (uint256) {
+        return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
     }
+
+    function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
+        return accuracy.mul(balanceOf(pair).mul(2)).div(getCirculatingSupply());
+    }
+
+    function isOverLiquified(uint256 target, uint256 accuracy) public view returns (bool) {
+        return getLiquidityBacking(accuracy) > target;
+    }
+
+
+    // Admin Settings Functions
 
     function setTxLimit(uint256 amount) external authorized {
         require(amount >= _totalSupply / 1000);
@@ -389,18 +434,6 @@ function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, 
 
     function setFeesGas(uint256 _newFeesGas) external authorized {
         feesGas = _newFeesGas;
-    }
-    
-    function getCirculatingSupply() public view returns (uint256) {
-        return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
-    }
-
-    function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
-        return accuracy.mul(balanceOf(pair).mul(2)).div(getCirculatingSupply());
-    }
-
-    function isOverLiquified(uint256 target, uint256 accuracy) public view returns (bool) {
-        return getLiquidityBacking(accuracy) > target;
     }
 
     function charityBuyForLiquidity() public payable {   
