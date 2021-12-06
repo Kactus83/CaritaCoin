@@ -1,97 +1,129 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.10;
 
+import "./libraries/SafeMath.sol";
+import "./interfaces/IDEXFactory+IDEXRouter.sol";
+import "./interfaces/IBEP20.sol";
 
-contract PreSale is IPreSale {
+contract PreSale {
     using SafeMath for uint256;
 
 
     address public DEAD = 0x000000000000000000000000000000000000dEaD;
     address public ZERO = 0x0000000000000000000000000000000000000000;
+    uint256 constant private MAX_INT = 2**256 - 1;
 
-    address public WBNB;
+    address public wbnbAddress;
     address public tokenAddress;
     address public pairAddress;
     address public routerAddress;
+    address private userManagementAddress;
+
     uint tokensSold;
 
-    uint256 constant private MAX_INT = 2**256 - 1;
-    
-    event Sold(address buyer, uint256 amount);
+    // Initialize Parameters
 
-    constructor (address _tokenAddress, address _wbnbAddress,  address _pairAddress, address _routerAddress) {
+    constructor (address _tokenAddress, address _wbnbAddress,  address _pairAddress, address _routerAddress, address _userManagementAddress) {
 
         tokenAddress = _tokenAddress;
-        WBNB = _wbnbAddress;
+        wbnbAddress = _wbnbAddress;
         pairAddress = _pairAddress;
         routerAddress = _routerAddress;
+        userManagementAddress = _userManagementAddress;
     }
 
-    IUserManagement userAdministration = IUserManagement(tokenAddress);
-    IDEXRouter pancakeRouter = IDEXRouter(routerAddress);
-    IBEP20 tokenContract = IBEP20(tokenAddress);  
-    IBEP20 lpToken = IBEP20(pairAddress);
-    IBEP20 wbnbContract = IBEP20(WBNB);
+    // Initialize Interfaces
 
-        
+    IUserManagement USERMANAGEMENT = IUserManagement(tokenAddress);
+    IDEXRouter ROUTER = IDEXRouter(routerAddress);
+    IBEP20 TOKEN = IBEP20(tokenAddress);  
+    IBEP20 LPTOKEN = IBEP20(pairAddress);
+    IBEP20 WBNB = IBEP20(wbnbAddress);
+
+    // Modifiers 
+
     modifier onlyToken() {
         require(msg.sender == tokenAddress); _;
     }
 
-    function getPathForTokenToBNB() internal view returns (address[] memory) {
+    // View Functions
+    
+    function getEstimatedTokenForBNB(uint buyAmountInWei) public view  returns (uint[] memory bnbQuote) {
+        bnbQuote = ROUTER.getAmountsIn(buyAmountInWei, getPathForTokenToBNB());
+    }
 
+    // Utility Functions
+
+    function getPathForTokenToBNB() internal view returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = tokenAddress;
-        path[1] = WBNB;
+        path[1] = wbnbAddress;
         
         return path;
     }
-    
-    function getEstimatedTokenForBNB(uint buyAmountInWei) external view override returns (uint[] memory bnbQuote) {
-
-        bnbQuote = pancakeRouter.getAmountsIn(buyAmountInWei, getPathForTokenToBNB());
-    }
 
     function checkAmountValidity (uint buyAmountInWei) internal view returns(bool checkResult) {
-    
-        try pancakeRouter.getAmountsIn(buyAmountInWei, getPathForTokenToBNB()) {
-            return true;        
+        try ROUTER.getAmountsIn(buyAmountInWei, getPathForTokenToBNB()) {
+            checkResult = true;
+            return checkResult;        
             }
         catch {
-            return false;
+            checkResult = false;
+            return checkResult;
             }
     }
 
-    function charityBuyForLiquidity(address _sender, uint _amount) external override {
-        require(checkAmountValidity(_amount) == true, "Amount is not valide");
+    // Buy Functions
 
-        uint amountOfToken = pancakeRouter.getAmountsIn(_amount, getPathForTokenToBNB())[1];
+    function CharityBuyForLiquidity() public payable {
+        require(checkAmountValidity(msg.value) == true, "Amount is not valide");
 
-        require(tokenContract.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
+        uint amountOfToken = ROUTER.getAmountsIn(msg.value, getPathForTokenToBNB())[1];
+
+        require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
 
         emit Sold(_sender, amountOfToken);
         tokensSold += amountOfToken;
 
-        require(tokenContract.transfer(_sender, amountOfToken));
-        userAdministration.updateUserGiftStats(address(_sender), _amount, amountOfToken);
+        require(TOKEN.transfer(_sender, amountOfToken));
+        USERMANAGEMENT.updateUserGiftStats(address(_sender), msg.value, amountOfToken);
     }
 
-    function endSale(address _sender) external override onlyToken{
-        require(userAdministration.isAuthorized(_sender) == true);
-        require(tokenContract.transfer(tokenAddress, tokenContract.balanceOf(address(this))));
+    function externalCharityBuyForLiquidity(address _sender, uint _amount) external {
+        require(checkAmountValidity(_amount) == true, "Amount is not valide");
+
+        uint amountOfToken = ROUTER.getAmountsIn(_amount, getPathForTokenToBNB())[1];
+
+        require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
+
+        emit Sold(_sender, amountOfToken);
+        tokensSold += amountOfToken;
+
+        require(TOKEN.transfer(_sender, amountOfToken));
+        USERMANAGEMENT.updateUserGiftStats(address(_sender), _amount, amountOfToken);
+    }
+
+    // Settings Functions
+
+    function endSale(address _sender) external  onlyToken{
+        require(USERMANAGEMENT.isAuthorized(_sender) == true);
+        require(TOKEN.transfer(tokenAddress, TOKEN.balanceOf(address(this))));
 
         payable(msg.sender).transfer(address(this).balance);
     }
 
-    function changeToken (address _newTokenAddress, address _newPairAddress) external override onlyToken {
-        require(userAdministration.isAuthorized(msg.sender) == true);
+    function changeToken (address _newTokenAddress, address _newPairAddress) external  onlyToken {
+        require(USERMANAGEMENT.isAuthorized(msg.sender) == true);
         tokenAddress = _newTokenAddress;
         pairAddress = _newPairAddress;
     }
 
-    function changeRouter (address _newRouterAddress) external override onlyToken{
-        require(userAdministration.isAuthorized(msg.sender) == true);
+    function changeRouter (address _newRouterAddress) external  onlyToken{
+        require(USERMANAGEMENT.isAuthorized(msg.sender) == true);
         routerAddress = _newRouterAddress;
     }
 
+    // Events
+
+    event Sold(address buyer, uint256 amount);
 }
