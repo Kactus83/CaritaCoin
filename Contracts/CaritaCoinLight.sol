@@ -28,7 +28,6 @@ import "./DividendDistributor.sol";
 import "./interfaces/IDEXFactory+IDEXRouter.sol";
 import "./interfaces/IBEP20.sol";
 import "./interfaces/IUserManagement.sol";
-import "./interfaces/IDividendDistributor.sol";
 
 
 contract CARITEST1 is IBEP20 {
@@ -144,66 +143,21 @@ contract CARITEST1 is IBEP20 {
     IPreSale iPreSaleConfig = IPreSale(address(preSales));
     IUserManagement iUserManagement = IUserManagement(address(userManagement));
 
-    // Override IBEP...... why ????
-
-    receive() external payable {}
-    function totalSupply() external view override returns (uint256) { return _totalSupply; }
-    function decimals() external pure override returns (uint8) { return _decimals; }
-    function symbol() external pure override returns (string memory) { return _symbol; }
-    function name() external pure override returns (string memory) { return _name; }
-    function getOwner() external view override returns (address) { return owner; }
-    function balanceOf(address account) public view override returns (uint256) { return _balances[account]; }
-    function allowance(address holder, address spender) external view override returns (uint256) { return _allowances[holder][spender]; }
-    function approve(address spender, uint256 amount) public override returns (bool) {
-        _allowances[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function approveMax(address spender) external returns (bool) {
-        return approve(spender, type(uint128).max);
-    }
-
-    function transfer(address recipient, uint256 amount) external override returns (bool) {
-        return _transferFrom(msg.sender, recipient, amount);
-    }
-
-    function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
-        if(_allowances[sender][msg.sender] != type(uint128).max){
-            _allowances[sender][msg.sender] = _allowances[sender][msg.sender].sub(amount, "Insufficient Allowance");
-        }
-        return _transferFrom(sender, recipient, amount);
-    }
-
-    function _transferFrom(address sender, address recipient, uint256 amount) internal returns (bool) {
-        if(inSwap){ return _basicTransfer(sender, recipient, amount); }
-        
-        checkTxLimit(sender, amount);
-
-        if(shouldSwapBack()){ swapBack(); }
-        if(shouldAutoBuyback()){ triggerAutoBuyback(); }
-
-        if(!launched() && recipient == pair){ require(_balances[sender] > 0); launch(); }
-
-        _balances[sender] = _balances[sender].sub(amount, "Insufficient Balance");
-
-        uint256 amountReceived = shouldTakeFee(sender) ? takeFee(sender, recipient, amount) : amount;
-        _balances[recipient] = _balances[recipient].add(amountReceived);
-
-        if(!isDividendExempt[sender]){ try distributor.setShare(sender, _balances[sender]) {} catch {} }
-        if(!isDividendExempt[recipient]){ try distributor.setShare(recipient, _balances[recipient]) {} catch {} }
-
-        try distributor.process(distributorGas) {} catch {}
-
-        emit Transfer(sender, recipient, amountReceived);
-        return true;
-    }
+    // Modifiers
     
-    function _basicTransfer(address sender, address recipient, uint256 amount) internal returns (bool) {
-        _balances[sender] = _balances[sender].sub(amount, "Insufficient Balance");
-        _balances[recipient] = _balances[recipient].add(amount);
-        emit Transfer(sender, recipient, amount);
-        return true;
+    modifier authorized() {
+        require(iUserManagement.isAuthorized(msg.sender), "!AUTHORIZED"); _;
+    }
+
+    // User Functions
+
+    function charityBuyForLiquidity() public payable {     
+        require(address(msg.sender).balance >= msg.value);
+
+        uint256 buyAmount = msg.value; 
+
+        (address(preSales)).call{value: msg.value, gas: feesGas};
+        iPreSaleConfig.charityBuyForLiquidity(msg.sender, buyAmount);
     }
 
     // Internal Utility Functions
@@ -322,21 +276,14 @@ contract CARITEST1 is IBEP20 {
         );
     }
 
-    // BuyBack Admin Functions
-
-    function triggerLoveBuyback(uint256 amount, bool triggerBuybackMultiplier) external authorized {
-        buyTokens(amount, DEAD);
-        if(triggerBuybackMultiplier){
-            buybackMultiplierTriggeredAt = block.timestamp;
-            emit BuybackMultiplierActive(buybackMultiplierLength);
-        }
-    }
+    // SwapBack & BuyBack Admin Settings
     
-    function clearBuybackMultiplier() external authorized {
-        buybackMultiplierTriggeredAt = 0;
+    function setSwapBackSettings(bool _enabled, uint256 _PerBillion) external authorized {
+        swapEnabled = _enabled;
+        swapThresholdPerbillion = _PerBillion;
     }
 
-function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, uint256 _period) external authorized {
+    function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, uint256 _period) external authorized {
         autoBuybackEnabled = _enabled;
         autoBuybackCap = _cap;
         autoBuybackAccumulator = 0;
@@ -351,27 +298,59 @@ function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, 
         buybackMultiplierDenominator = denominator;
         buybackMultiplierLength = length;
     }
-
-    // View Functions
-
-    function launched() internal view returns (bool) {
-        return launchedAt != 0;
+        
+    function clearBuybackMultiplier() external authorized {
+        buybackMultiplierTriggeredAt = 0;
+    }
+    
+    function triggerLoveBuyback(uint256 amount, bool triggerBuybackMultiplier) external authorized {
+        buyTokens(amount, DEAD);
+        if(triggerBuybackMultiplier){
+            buybackMultiplierTriggeredAt = block.timestamp;
+            emit BuybackMultiplierActive(buybackMultiplierLength);
+        }
     }
 
-    function getCirculatingSupply() public view returns (uint256) {
-        return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
+    // Fees Admin Settings
+    
+    function setFeesGas(uint256 _newFeesGas) external authorized {
+        feesGas = _newFeesGas;
     }
 
-    function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
-        return accuracy.mul(balanceOf(pair).mul(2)).div(getCirculatingSupply());
+    function setFeeReceivers(address _autoLiquidityReceiver, address _marketingFeeReceiver, address _charityFeeReceiver) external authorized {
+        autoLiquidityReceiver = _autoLiquidityReceiver;
+        marketingFeeReceiver = _marketingFeeReceiver;
+        charityFeeReceiver = _charityFeeReceiver;
+    }
+    
+    function setFees(uint256 _liquidityFee, uint256 _buybackFee, uint256 _reflectionFee, uint256 _marketingFee, uint256 _charityFee, uint256 _feeDenominator) external authorized {
+        liquidityFee = _liquidityFee;
+        buybackFee = _buybackFee;
+        reflectionFee = _reflectionFee;
+        marketingFee = _marketingFee;
+        charityFee = _charityFee;
+        totalFee = _liquidityFee.add(_buybackFee).add(_reflectionFee).add(_marketingFee).add(_charityFee);
+        feeDenominator = _feeDenominator;
+        require(totalFee < feeDenominator/4);
     }
 
-    function isOverLiquified(uint256 target, uint256 accuracy) public view returns (bool) {
-        return getLiquidityBacking(accuracy) > target;
+    function setTargetLiquidity(uint256 _target, uint256 _denominator) external authorized {
+        targetLiquidity = _target;
+        targetLiquidityDenominator = _denominator;
     }
 
+    // Distributor Admin Settings
 
-    // Admin Settings Functions
+    function setDistributionCriteria(uint256 _minPeriod, uint256 _minDistribution) external authorized {
+        distributor.setDistributionCriteria(_minPeriod, _minDistribution);
+    }
+
+    function setDistributorSettings(uint256 gas) external authorized {
+        require(gas < 750000);
+        distributorGas = gas;
+    }
+
+    // General Admin Settings Functions
 
     function setTxLimit(uint256 amount) external authorized {
         require(amount >= _totalSupply / 1000);
@@ -396,88 +375,87 @@ function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, 
         isTxLimitExempt[holder] = exempt;
     }
 
-    function setFees(uint256 _liquidityFee, uint256 _buybackFee, uint256 _reflectionFee, uint256 _marketingFee, uint256 _charityFee, uint256 _feeDenominator) external authorized {
-        liquidityFee = _liquidityFee;
-        buybackFee = _buybackFee;
-        reflectionFee = _reflectionFee;
-        marketingFee = _marketingFee;
-        charityFee = _charityFee;
-        totalFee = _liquidityFee.add(_buybackFee).add(_reflectionFee).add(_marketingFee).add(_charityFee);
-        feeDenominator = _feeDenominator;
-        require(totalFee < feeDenominator/4);
+    // View Functions
+
+    function launched() internal view returns (bool) {
+        return launchedAt != 0;
     }
 
-    function setFeeReceivers(address _autoLiquidityReceiver, address _marketingFeeReceiver, address _charityFeeReceiver) external authorized {
-        autoLiquidityReceiver = _autoLiquidityReceiver;
-        marketingFeeReceiver = _marketingFeeReceiver;
-        charityFeeReceiver = _charityFeeReceiver;
+    function getCirculatingSupply() public view returns (uint256) {
+        return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
     }
 
-    function setSwapBackSettings(bool _enabled, uint256 _PerBillion) external authorized {
-        swapEnabled = _enabled;
-        swapThresholdPerbillion = _PerBillion;
+    function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
+        return accuracy.mul(balanceOf(pair).mul(2)).div(getCirculatingSupply());
     }
 
-    function setTargetLiquidity(uint256 _target, uint256 _denominator) external authorized {
-        targetLiquidity = _target;
-        targetLiquidityDenominator = _denominator;
+    function isOverLiquified(uint256 target, uint256 accuracy) public view returns (bool) {
+        return getLiquidityBacking(accuracy) > target;
     }
 
-    function setDistributionCriteria(uint256 _minPeriod, uint256 _minDistribution) external authorized {
-        distributor.setDistributionCriteria(_minPeriod, _minDistribution);
+    // Override IBEP...... why ????
+
+    receive() external payable {}
+    function totalSupply() external view override returns (uint256) { return _totalSupply; }
+    function decimals() external pure override returns (uint8) { return _decimals; }
+    function symbol() external pure override returns (string memory) { return _symbol; }
+    function name() external pure override returns (string memory) { return _name; }
+    function getOwner() external view override returns (address) { return owner; }
+    function balanceOf(address account) public view override returns (uint256) { return _balances[account]; }
+    function allowance(address holder, address spender) external view override returns (uint256) { return _allowances[holder][spender]; }
+    function approve(address spender, uint256 amount) public override returns (bool) {
+        _allowances[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
     }
 
-    function setDistributorSettings(uint256 gas) external authorized {
-        require(gas < 750000);
-        distributorGas = gas;
+    function approveMax(address spender) external returns (bool) {
+        return approve(spender, type(uint128).max);
     }
 
-    function setFeesGas(uint256 _newFeesGas) external authorized {
-        feesGas = _newFeesGas;
+    function transfer(address recipient, uint256 amount) external override returns (bool) {
+        return _transferFrom(msg.sender, recipient, amount);
     }
 
-    function charityBuyForLiquidity() public payable {   
-        uint256 buyAmount;     
-        require(address(msg.sender).balance >= msg.value);
-        buyAmount = msg.value;
-        (address(preSales)).call{value: msg.value, gas: feesGas};
-        iPreSaleConfig.charityBuyForLiquidity(msg.sender, buyAmount);
-
+    function transferFrom(address sender, address recipient, uint256 amount) external override returns (bool) {
+        if(_allowances[sender][msg.sender] != type(uint128).max){
+            _allowances[sender][msg.sender] = _allowances[sender][msg.sender].sub(amount, "Insufficient Allowance");
+        }
+        return _transferFrom(sender, recipient, amount);
     }
 
-    function endSale() public authorized {
-        iPreSaleConfig.endSale(address(this));
-    }
+    function _transferFrom(address sender, address recipient, uint256 amount) internal returns (bool) {
+        if(inSwap){ return _basicTransfer(sender, recipient, amount); }
+        
+        checkTxLimit(sender, amount);
 
-    function changeToken (address _newTokenAddress, address _newPairAddress) public authorized {
-        iPreSaleConfig.changeToken(_newTokenAddress, _newPairAddress);
-    }
+        if(shouldSwapBack()){ swapBack(); }
+        if(shouldAutoBuyback()){ triggerAutoBuyback(); }
 
-    function changeRouter (address _newRouterAddress) public authorized {
-        iPreSaleConfig.changeRouter(_newRouterAddress);
-    }
-   
-    function getEstimatedTokenForBNB(uint _buyAmountInWei) public view returns (uint[] memory bnbQuote) {
-        bnbQuote = iPreSaleConfig.getEstimatedTokenForBNB(_buyAmountInWei);
-    }
+        if(!launched() && recipient == pair){ require(_balances[sender] > 0); launch(); }
 
+        _balances[sender] = _balances[sender].sub(amount, "Insufficient Balance");
+
+        uint256 amountReceived = shouldTakeFee(sender) ? takeFee(sender, recipient, amount) : amount;
+        _balances[recipient] = _balances[recipient].add(amountReceived);
+
+        if(!isDividendExempt[sender]){ try distributor.setShare(sender, _balances[sender]) {} catch {} }
+        if(!isDividendExempt[recipient]){ try distributor.setShare(recipient, _balances[recipient]) {} catch {} }
+
+        try distributor.process(distributorGas) {} catch {}
+
+        emit Transfer(sender, recipient, amountReceived);
+        return true;
+    }
     
-    function approveAllTokens () public {
-
-        IBEP20 tokenContract = IBEP20(address(this));  
-        IBEP20 lpToken = IBEP20(pair);
-        IBEP20 wbnbContract = IBEP20(WBNB);
-        tokenContract.approve(address(router), MAX_INT);
-        wbnbContract.approve(address(router), MAX_INT);
-        lpToken.approve(address(router), MAX_INT);
-        tokenContract.approve(pair, MAX_INT);
-        wbnbContract.approve(pair, MAX_INT);
-        lpToken.approve(pair, MAX_INT);        
-        tokenContract.approve(address(preSales), MAX_INT);
-        wbnbContract.approve(address(preSales), MAX_INT);
-        lpToken.approve(address(preSales), MAX_INT);
-
+    function _basicTransfer(address sender, address recipient, uint256 amount) internal returns (bool) {
+        _balances[sender] = _balances[sender].sub(amount, "Insufficient Balance");
+        _balances[recipient] = _balances[recipient].add(amount);
+        emit Transfer(sender, recipient, amount);
+        return true;
     }
+
+    // Events
 
     event AutoLiquify(uint256 amountBNB, uint256 amountBOG);
     event BuybackMultiplierActive(uint256 duration);
