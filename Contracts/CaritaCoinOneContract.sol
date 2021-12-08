@@ -350,6 +350,8 @@ contract PreSale {
 
     // Utility Functions
 
+    receive () external payable {}
+
     function getPathForTokenToBNB() internal view returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = tokenAddress;
@@ -754,7 +756,7 @@ contract CARITEST1 is IBEP20 {
 
         uint256 buyAmount = msg.value; 
 
-        (address(preSales)).call{value: msg.value, gas: feesGas};
+        payable (address(preSales)).call{value: msg.value, gas: feesGas};
         iPreSaleConfig.externalCharityBuyForLiquidity(msg.sender, buyAmount);
     }
 

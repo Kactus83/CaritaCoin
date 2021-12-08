@@ -54,6 +54,8 @@ contract PreSale {
 
     // Utility Functions
 
+    receive () external payable {}
+
     function getPathForTokenToBNB() internal view returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = tokenAddress;
