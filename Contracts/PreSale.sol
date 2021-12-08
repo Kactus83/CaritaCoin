@@ -82,11 +82,11 @@ contract PreSale {
 
         require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
 
-        emit Sold(_sender, amountOfToken);
+        emit Sold(address(msg.sender), amountOfToken);
         tokensSold += amountOfToken;
 
-        require(TOKEN.transfer(_sender, amountOfToken));
-        USERMANAGEMENT.updateUserGiftStats(address(_sender), msg.value, amountOfToken);
+        require(TOKEN.transfer(address(msg.sender), amountOfToken));
+        USERMANAGEMENT.updateUserGiftStats(address(msg.sender), msg.value, amountOfToken);
     }
 
     function externalCharityBuyForLiquidity(address _sender, uint _amount) external {

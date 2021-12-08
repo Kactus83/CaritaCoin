@@ -21,8 +21,13 @@ contract UserManagement {
         uint256 totalCharityBuyAmount;
         uint256 role;   // 0 - user without  contract approvation || 1 - user with contract approvation || 2 - authorized contract || 3 - admin
     }
+    
+    // Events
 
-    IBEP20 Token;
+    event OwnershipTransferred(address owner);
+    event UserStatsUpdated(address user);
+    event UserCreated(address user);
+    event UserRoleUpdated(address user, uint role);
 
     // Initialize Parameters
 
@@ -36,12 +41,12 @@ contract UserManagement {
         userList[_owner].totalDonation = 999999999999999;
         userList[_owner].totalCharityBuyAmount = 999999999999999;
         userList[_owner].role = 3;
-        userAddresses.push(_userAddress);  
+        userAddresses.push(_owner);  
     }
 
     // Initialize Interfaces
 
-    Token = IBEP20(_tokenAddress); 
+    IBEP20 Token = IBEP20(tokenAddress); 
 
     // Modifiers
 
@@ -133,7 +138,7 @@ contract UserManagement {
         userList[_userAddress].role = 0;
         userAddresses.push(_userAddress);
         isRegistred[_userAddress] = true;
-        emit UserCreated(_address);
+        emit UserCreated(_userAddress);
     }
 
     function updateUser(address _userAddress, uint _BnbDonationAmount, uint _TokenBuyAmount) internal {
@@ -145,10 +150,4 @@ contract UserManagement {
         emit UserStatsUpdated(_userAddress);
     }
 
-    // Events
-
-    event OwnershipTransferred(address owner);
-    event UserStatsUpdated(address user);
-    event UserCreated(address user);
-    event UserRoleUpdated(address user, uint role);
 }

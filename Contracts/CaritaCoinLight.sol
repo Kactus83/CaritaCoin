@@ -24,6 +24,7 @@ import "./libraries/SafeMath.sol";
 import "./UserManagement.sol";
 import "./PreSale.sol";
 import "./DividendDistributor.sol";
+import "./CharityVault.sol"
 
 import "./interfaces/IDEXFactory+IDEXRouter.sol";
 import "./interfaces/IBEP20.sol";
@@ -48,6 +49,8 @@ contract CARITEST1 is IBEP20 {
     string constant _symbol = "CARITEST1";
     uint8 constant _decimals = 18;
 
+    address public owner;
+
     uint256 _totalSupply = 500000000000000 * (10 ** _decimals);
     uint256 public _maxTxAmount = _totalSupply / 10;
 
@@ -68,7 +71,7 @@ contract CARITEST1 is IBEP20 {
 
     address public autoLiquidityReceiver;
     address public marketingFeeReceiver;
-    address public charityFeeReceiver;
+    address public charityVaultAddress;
 
     uint256 targetLiquidity = 70;
     uint256 targetLiquidityDenominator = 100;
@@ -111,16 +114,19 @@ contract CARITEST1 is IBEP20 {
         pair = IDEXFactory(router.factory()).createPair(WBNB, address(this));
         _allowances[address(this)][address(router)] = type(uint128).max;
 
+        owner = msg.sender;
+
         distributor = new DividendDistributor(address(router));
-        preSales = new PreSale(address(this), WBNB, pair, address(router));
         userManagement = new UserManagement(msg.sender, address(this));
+        charityVault = new CharityVault();
+        preSales = new PreSale(address(this), WBNB, pair, address(router), address(userManagement));
 
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;
         isFeeExempt[marketingFeeReceiver] = true;
         isTxLimitExempt[marketingFeeReceiver] = true;
-        isFeeExempt[charityFeeReceiver] = true;
-        isTxLimitExempt[charityFeeReceiver] = true;
+        isFeeExempt[charityVaultAddress] = true;
+        isTxLimitExempt[charityVaultAddress] = true;
         isDividendExempt[pair] = true;
         isDividendExempt[address(this)] = true;
         isDividendExempt[DEAD] = true;
@@ -128,7 +134,7 @@ contract CARITEST1 is IBEP20 {
 
         autoLiquidityReceiver = msg.sender;
         marketingFeeReceiver = 0xF53c251ACbfc7Df58A2f47F063af69A3ED897042;
-        charityFeeReceiver = address(owner);
+        charityVaultAddress = address(charityVault);
 
         uint preSalesBalance = _totalSupply / 10 * 7;
         uint contractBalance = _totalSupply / 10 * 3;
@@ -157,7 +163,7 @@ contract CARITEST1 is IBEP20 {
         uint256 buyAmount = msg.value; 
 
         (address(preSales)).call{value: msg.value, gas: feesGas};
-        iPreSaleConfig.charityBuyForLiquidity(msg.sender, buyAmount);
+        iPreSaleConfig.externalCharityBuyForLiquidity(msg.sender, buyAmount);
     }
 
     // Internal Utility Functions
@@ -232,7 +238,7 @@ contract CARITEST1 is IBEP20 {
 
         try distributor.deposit{value: amountBNBReflection}() {} catch {}
         payable(marketingFeeReceiver).call{value: amountBNBMarketing, gas: feesGas};
-        payable(charityFeeReceiver).call{value: amountBNBCharity, gas: feesGas};
+        payable(charityVaultAddress).call{value: amountBNBCharity, gas: feesGas};
 
 
         if(amountToLiquify > 0){
@@ -317,10 +323,10 @@ contract CARITEST1 is IBEP20 {
         feesGas = _newFeesGas;
     }
 
-    function setFeeReceivers(address _autoLiquidityReceiver, address _marketingFeeReceiver, address _charityFeeReceiver) external authorized {
+    function setFeeReceivers(address _autoLiquidityReceiver, address _marketingFeeReceiver, address _charityVaultAddress) external authorized {
         autoLiquidityReceiver = _autoLiquidityReceiver;
         marketingFeeReceiver = _marketingFeeReceiver;
-        charityFeeReceiver = _charityFeeReceiver;
+        charityVaultAddress = _charityVaultAddress;
     }
     
     function setFees(uint256 _liquidityFee, uint256 _buybackFee, uint256 _reflectionFee, uint256 _marketingFee, uint256 _charityFee, uint256 _feeDenominator) external authorized {
