@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.10;
+pragma solidity >=0.8.9;
 
+import "./Interfaces/IDEXFactory+IDEXRouter.sol";
+import "./Libraries/SafeMath.sol";
+import "./Interfaces/IBEP20.sol";
+import "./Interfaces/IDividendDistributor.sol";
 
 contract DividendDistributor is IDividendDistributor {
     using SafeMath for uint256;

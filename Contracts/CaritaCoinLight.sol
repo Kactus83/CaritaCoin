@@ -1,4 +1,4 @@
-pragma solidity 0.8.10;
+pragma solidity >=0.8.9;
 // SPDX-License-Identifier: MIT
 
 
@@ -19,46 +19,30 @@ pragma solidity 0.8.10;
 /////////////////////////////////////////////////////////////////////////////////////////////
 
 
-import "./libraries/SafeMath.sol";
+import "./Libraries/SafeMath.sol";
+
+import "./Interfaces/IDEXFactory+IDEXRouter.sol";
+import "./Interfaces/IBEP20.sol";
+import "./Interfaces/IPreSale.sol";
+import "./Interfaces/IUserManagement.sol";
 
 import "./UserManagement.sol";
 import "./PreSale.sol";
 import "./DividendDistributor.sol";
 import "./CharityVault.sol";
+import "./Context.sol";
 
-import "./interfaces/IDEXFactory+IDEXRouter.sol";
-import "./interfaces/IBEP20.sol";
-import "./interfaces/IUserManagement.sol";
+    // View Function
 
-contract Context {
-
-    // Constant Addresses & Parameters
-
-    address public owner;
-
-    address private BUSD = 0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7;
-    address private WBNB = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
-    address private DEAD = 0x000000000000000000000000000000000000dEaD;
-    address private ZERO = 0x0000000000000000000000000000000000000000;
-    address private ROUTER = 0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3;
-    address public DEVWALLET = 0xF53c251ACbfc7Df58A2f47F063af69A3ED897042;
-
-    uint256 constant private MAX_INT = 2**256 - 1;
-
-
-    constructor() {
-    
-        owner = msg.sender;
-
-        userManagement = new UserManagement(msg.sender, address(this));
-        charityVault = new CharityVault();
-        preSales = new PreSale(address(this), WBNB, pair, address(ROUTER), address(userManagement));
-
-    }
-
+    function getOwnerAddress() external view returns(address) { return owner;}
+    function getPairAddress() external view returns(address) { return dexPair;}
+    function getTokenAddress() external view returns(address) { return address(this);}
+    function getWBNBAddress() external view returns(address) { return WBNB;}
+    function getRouterAddress() external view returns(address) { return ROUTER;}
+    function getUserManagementAddress() external view returns(address) { return userManagementAddress;}
 }
 
-contract CARITEST1 is IBEP20, Context {
+contract CaritaCoinLight is IBEP20, Context {
     using SafeMath for uint256;
 
     // Coin Parameters
@@ -87,13 +71,10 @@ contract CARITEST1 is IBEP20, Context {
 
     address public autoLiquidityReceiver;
     address public marketingFeeReceiver;
-    address public charityVaultAddress;
 
     uint256 targetLiquidity = 70;
     uint256 targetLiquidityDenominator = 100;
 
-    IDEXRouter public router;
-    address public pair;
 
     uint256 public launchedAt;
 
@@ -106,9 +87,11 @@ contract CARITEST1 is IBEP20, Context {
     uint256 autoBuybackCap;
     uint256 autoBuybackAccumulator;
     uint256 autoBuybackPermille = 100;
-    uint256 autoBuybackAmount = address(pair).balance * (autoBuybackPermille / 5000); // pair balance counts twice so 10000 -> 5000
+    uint256 autoBuybackAmount = address(dexPair).balance * (autoBuybackPermille / 5000); // dexPair balance counts twice so 10000 -> 5000
     uint256 autoBuybackBlockPeriod;
     uint256 autoBuybackBlockLast;
+
+    DividendDistributor distributor;
 
     uint256 distributorGas = 500000;
     uint256 feesGas = 70000;
@@ -118,7 +101,8 @@ contract CARITEST1 is IBEP20, Context {
     uint256 public swapThreshold = 5000000000 * (10 ** _decimals) * swapThresholdPerbillion;
     bool inSwap;
     modifier swapping() { inSwap = true; _; inSwap = false; }
-    
+
+
     // Events
 
     event AutoLiquify(uint256 amountBNB, uint256 amountBOG);
@@ -127,11 +111,10 @@ contract CARITEST1 is IBEP20, Context {
     // Initialize Parameters
 
     constructor () {
-        router = IDEXRouter(ROUTER);
-        pair = IDEXFactory(router.factory()).createPair(WBNB, address(this));
-        _allowances[address(this)][address(router)] = type(uint128).max;
 
-        distributor = new DividendDistributor(address(router));
+        _allowances[address(this)][address(iRouter)] = type(uint128).max;
+
+        distributor = new DividendDistributor(address(iRouter));
 
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;
@@ -139,27 +122,22 @@ contract CARITEST1 is IBEP20, Context {
         isTxLimitExempt[marketingFeeReceiver] = true;
         isFeeExempt[charityVaultAddress] = true;
         isTxLimitExempt[charityVaultAddress] = true;
-        isDividendExempt[pair] = true;
+        isDividendExempt[dexPair] = true;
         isDividendExempt[address(this)] = true;
         isDividendExempt[DEAD] = true;
         isDividendExempt[ZERO] = true;
 
         autoLiquidityReceiver = msg.sender;
         marketingFeeReceiver = DEVWALLET;
-        charityVaultAddress = address(charityVault);
+        charityVaultAddress = address(charityVaultAddress);
 
         uint preSalesBalance = _totalSupply / 10 * 7;
         uint contractBalance = _totalSupply / 10 * 3;
         _balances[msg.sender] = contractBalance;
-        _balances[address(preSales)] = preSalesBalance;
+        _balances[address(preSalesAddress)] = preSalesBalance;
         emit Transfer(address(0), msg.sender, contractBalance);
-        emit Transfer(address(0), address(preSales), preSalesBalance);
+        emit Transfer(address(0), address(preSalesAddress), preSalesBalance);
     }
-
-    // Initialize Interfaces
-
-    IPreSale iPreSaleConfig = IPreSale(address(preSales));
-    IUserManagement iUserManagement = IUserManagement(address(userManagement));
 
     // Modifiers
     
@@ -174,7 +152,7 @@ contract CARITEST1 is IBEP20, Context {
 
         uint256 buyAmount = msg.value; 
 
-        payable (address(preSales)).call{value: msg.value, gas: feesGas};
+        payable (address(preSalesAddress)).call{value: msg.value, gas: feesGas};
         iPreSaleConfig.externalCharityBuyForLiquidity(msg.sender, buyAmount);
     }
 
@@ -205,7 +183,7 @@ contract CARITEST1 is IBEP20, Context {
     }
 
     function takeFee(address sender, address receiver, uint256 amount) internal returns (uint256) {
-        uint256 feeAmount = amount.mul(getTotalFee(receiver == pair)).div(feeDenominator);
+        uint256 feeAmount = amount.mul(getTotalFee(receiver == dexPair)).div(feeDenominator);
 
         _balances[address(this)] = _balances[address(this)].add(feeAmount);
         emit Transfer(sender, address(this), feeAmount);
@@ -214,7 +192,7 @@ contract CARITEST1 is IBEP20, Context {
     }
 
     function shouldSwapBack() internal view returns (bool) {
-        return msg.sender != pair
+        return msg.sender != dexPair
         && !inSwap
         && swapEnabled
         && _balances[address(this)] >= swapThreshold;
@@ -231,7 +209,7 @@ contract CARITEST1 is IBEP20, Context {
 
         uint256 balanceBefore = address(this).balance;
 
-        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        iRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
             amountToSwap,
             0,
             path,
@@ -254,7 +232,7 @@ contract CARITEST1 is IBEP20, Context {
 
 
         if(amountToLiquify > 0){
-            router.addLiquidityETH{value: amountBNBLiquidity}(
+            iRouter.addLiquidityETH{value: amountBNBLiquidity}(
                 address(this),
                 amountToLiquify,
                 0,
@@ -267,7 +245,7 @@ contract CARITEST1 is IBEP20, Context {
     }
 
     function shouldAutoBuyback() internal view returns (bool) {
-        return msg.sender != pair
+        return msg.sender != dexPair
             && !inSwap
             && autoBuybackEnabled
             && autoBuybackBlockLast + autoBuybackBlockPeriod <= block.number
@@ -286,7 +264,7 @@ contract CARITEST1 is IBEP20, Context {
         path[0] = WBNB;
         path[1] = address(this);
 
-        router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
+        iRouter.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
             0,
             path,
             to,
@@ -376,7 +354,7 @@ contract CARITEST1 is IBEP20, Context {
     }
 
     function setIsDividendExempt(address holder, bool exempt) external authorized {
-        require(holder != address(this) && holder != pair);
+        require(holder != address(this) && holder != dexPair);
         isDividendExempt[holder] = exempt;
         if(exempt){
             distributor.setShare(holder, 0);
@@ -404,7 +382,7 @@ contract CARITEST1 is IBEP20, Context {
     }
 
     function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
-        return accuracy.mul(balanceOf(pair).mul(2)).div(getCirculatingSupply());
+        return accuracy.mul(balanceOf(dexPair).mul(2)).div(getCirculatingSupply());
     }
 
     function isOverLiquified(uint256 target, uint256 accuracy) public view returns (bool) {
@@ -450,7 +428,7 @@ contract CARITEST1 is IBEP20, Context {
         if(shouldSwapBack()){ swapBack(); }
         if(shouldAutoBuyback()){ triggerAutoBuyback(); }
 
-        if(!launched() && recipient == pair){ require(_balances[sender] > 0); launch(); }
+        if(!launched() && recipient == dexPair){ require(_balances[sender] > 0); launch(); }
 
         _balances[sender] = _balances[sender].sub(amount, "Insufficient Balance");
 

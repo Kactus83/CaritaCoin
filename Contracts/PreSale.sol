@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.10;
+pragma solidity >=0.8.9;
 
-import "./libraries/SafeMath.sol";
-import "./interfaces/IDEXFactory+IDEXRouter.sol";
-import "./interfaces/IBEP20.sol";
+import "./Libraries/SafeMath.sol";
+import "./Interfaces/IUserManagement.sol";
+import "./Interfaces/IDEXFactory+IDEXRouter.sol";
+import "./Interfaces/IBEP20.sol";
+import "./Interfaces/IConfig.sol";
 
 contract PreSale {
     using SafeMath for uint256;
@@ -21,24 +23,28 @@ contract PreSale {
 
     uint tokensSold;
 
-    // Initialize Parameters
-
-    constructor (address _tokenAddress, address _wbnbAddress,  address _pairAddress, address _routerAddress, address _userManagementAddress) {
-
-        tokenAddress = _tokenAddress;
-        wbnbAddress = _wbnbAddress;
-        pairAddress = _pairAddress;
-        routerAddress = _routerAddress;
-        userManagementAddress = _userManagementAddress;
-    }
-
     // Initialize Interfaces
 
-    IUserManagement USERMANAGEMENT = IUserManagement(tokenAddress);
+    IUserManagement USERMANAGEMENT = IUserManagement(userManagementAddress);
     IDEXRouter ROUTER = IDEXRouter(routerAddress);
-    IBEP20 TOKEN = IBEP20(tokenAddress);  
+    IBEP20 TOKEN = IBEP20(tokenAddress);
     IBEP20 LPTOKEN = IBEP20(pairAddress);
     IBEP20 WBNB = IBEP20(wbnbAddress);
+    IConfig iConfig = IConfig(tokenAddress);
+
+    // Initialize Parameters
+
+    constructor () {
+        
+        tokenAddress = address(msg.sender);
+        iConfig = IConfig(msg.sender);
+
+        tokenAddress = iConfig.getTokenAddress();
+        wbnbAddress = iConfig.getWBNBAddress();
+        pairAddress = iConfig.getPairAddress();
+        routerAddress = iConfig.getRouterAddress();
+        userManagementAddress = iConfig.getUserManagementAddress();
+    }
 
     // Modifiers 
 
@@ -125,6 +131,15 @@ contract PreSale {
     function changeRouter (address _newRouterAddress) external  onlyToken{
         require(USERMANAGEMENT.isAuthorized(msg.sender) == true);
         routerAddress = _newRouterAddress;
+    }
+
+    function refreshBaseSettings() external onlyToken {
+
+        tokenAddress = iConfig.getTokenAddress();
+        wbnbAddress = iConfig.getWBNBAddress();
+        pairAddress = iConfig.getPairAddress();
+        routerAddress = iConfig.getRouterAddress();
+        userManagementAddress = iConfig.getUserManagementAddress();
     }
 
     // Events

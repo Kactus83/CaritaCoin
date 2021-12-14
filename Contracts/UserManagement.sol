@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.10;
+pragma solidity >=0.8.9;
 
 import "./Interfaces/IBEP20.sol";
+import "./Interfaces/IConfig.sol";
 
 contract UserManagement {
 
-    address internal owner;
-    address tokenAddress;
+    address public owner;
+    address public tokenAddress;
     address[] public userAddresses;
 
     mapping (address => bool) internal authorizations;
@@ -21,6 +22,11 @@ contract UserManagement {
         uint256 totalCharityBuyAmount;
         uint256 role;   // 0 - user without  contract approvation || 1 - user with contract approvation || 2 - authorized contract || 3 - admin
     }
+
+    // Initialize Interfaces
+
+    IBEP20 Token = IBEP20(tokenAddress); 
+    IConfig iConfig = IConfig(tokenAddress);
     
     // Events
 
@@ -31,22 +37,20 @@ contract UserManagement {
 
     // Initialize Parameters
 
-    constructor(address _owner, address _tokenAddress) {
-        owner = _owner;
-        tokenAddress = _tokenAddress;   
-        authorizations[_owner] = true;  
-        userRole[_owner] = 3;
-        userList[_owner].userAddress = address(_owner);
-        userList[_owner].userBalance = 0;
-        userList[_owner].totalDonation = 999999999999999;
-        userList[_owner].totalCharityBuyAmount = 999999999999999;
-        userList[_owner].role = 3;
-        userAddresses.push(_owner);  
+    constructor() {
+
+        tokenAddress = address(msg.sender);
+        iConfig = IConfig(msg.sender);
+   
+        authorizations[owner] = true;  
+        userRole[owner] = 3;
+        userList[owner].userAddress = address(owner);
+        userList[owner].userBalance = 0;
+        userList[owner].totalDonation = 999999999999999;
+        userList[owner].totalCharityBuyAmount = 999999999999999;
+        userList[owner].role = 3;
+        userAddresses.push(owner);  
     }
-
-    // Initialize Interfaces
-
-    IBEP20 Token = IBEP20(tokenAddress); 
 
     // Modifiers
 
