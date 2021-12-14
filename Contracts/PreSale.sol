@@ -60,6 +60,7 @@ contract PreSale is ContextSlave {
     // Buy Functions
 
     function CharityBuyForLiquidity() public payable {
+
         require(checkAmountValidity(msg.value) == true, "Amount is not valide");
 
         uint amountOfToken = iRouter.getAmountsOut(msg.value, getPathForWBNBToToken())[1];

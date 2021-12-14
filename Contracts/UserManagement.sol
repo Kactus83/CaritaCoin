@@ -11,6 +11,7 @@ contract UserManagement is ContextMaster {
     address[] public userAddresses;
 
     mapping (address => bool) internal authorizations;
+    mapping (address => bool) internal contractAuthorizations;
     mapping (address => uint) userRole;
     mapping (address => bool) isRegistred;
     mapping (address => userDetails) userList;
@@ -58,7 +59,7 @@ contract UserManagement is ContextMaster {
     }
 
     modifier authorizedContract() {
-        require(userRole[msg.sender] == 1); _;
+        require(isAuthorizedContract(msg.sender), "!AUTHORIZEDCONTRACT"); _;
     }
 
     // Read Functions
@@ -70,7 +71,11 @@ contract UserManagement is ContextMaster {
     function isAuthorized(address adr) public view returns (bool) {
         return authorizations[adr];
     }
-    
+ 
+    function isAuthorizedContract(address adr) public view returns (bool) {
+        return contractAuthorizations[adr];
+    }
+
     function getUserBalance(address _userAddress) external view returns(uint _userBalance) {
         _userBalance = userList[_userAddress].userBalance;
         return _userBalance;
@@ -158,6 +163,9 @@ contract UserManagement is ContextMaster {
         preSalesAddress = a3;
         distributorAddress = a4;
         owner = a5;
+        contractAuthorizations[preSalesAddress] = true;
+        contractAuthorizations[charityVaultAddress] = true; 
+        contractAuthorizations[owner] = true; 
 
         iPreSaleConfig = IPreSale(a3);
         iCharityVault = ICharityVault(a2);

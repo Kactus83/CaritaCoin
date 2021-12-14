@@ -124,7 +124,7 @@ contract ContextSlave is Context {
         DEVWALLET = iConfig.getDevWalletAddress();   
 
         iRouter = IDEXRouter(ROUTER);
-        iUserManagement = IUserManagement(address(this));
+        iUserManagement = IUserManagement(userManagementAddress);
         iToken = IBEP20(TOKEN);
         iPreSaleConfig = IPreSale(preSalesAddress);
         iCharityVault = ICharityVault(charityVaultAddress);
