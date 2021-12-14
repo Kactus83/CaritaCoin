@@ -18,4 +18,12 @@ interface IPreSale {
     function endSale(address _sender) external;
     function changeToken (address _newTokenAddress, address _newPairAddress) external;
     function changeRouter (address _newRouterAddress) external;
+
+    // Token Initialization Function
+    
+    function setUserManagementAddress(address _newAddress) external;
+    
+    // Slave Edit Function
+
+    function adminEditSettings() external ;
 }

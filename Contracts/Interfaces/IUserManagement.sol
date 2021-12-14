@@ -16,4 +16,8 @@ interface IUserManagement {
 
     function contractEditUserRole (address _address, uint _role) external;
     function updateUserGiftStats(address _userAddress, uint bnbDonationAmount, uint tokenBuyAmount) external;
+
+    // Initialization
+
+    function initialVariableEdition(address a1, address a2, address a3, address a4) external;
 }

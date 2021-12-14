@@ -24,25 +24,17 @@ import "./Libraries/SafeMath.sol";
 import "./Interfaces/IDEXFactory+IDEXRouter.sol";
 import "./Interfaces/IBEP20.sol";
 import "./Interfaces/IPreSale.sol";
+import "./Interfaces/ICharityVault.sol";
 import "./Interfaces/IUserManagement.sol";
+import "./Interfaces/ICoin.sol";
 
 import "./UserManagement.sol";
 import "./PreSale.sol";
 import "./DividendDistributor.sol";
 import "./CharityVault.sol";
-import "./Context.sol";
 
-    // View Function
 
-    function getOwnerAddress() external view returns(address) { return owner;}
-    function getPairAddress() external view returns(address) { return dexPair;}
-    function getTokenAddress() external view returns(address) { return address(this);}
-    function getWBNBAddress() external view returns(address) { return WBNB;}
-    function getRouterAddress() external view returns(address) { return ROUTER;}
-    function getUserManagementAddress() external view returns(address) { return userManagementAddress;}
-}
-
-contract CaritaCoinLight is IBEP20, Context {
+contract CaritaCoinLight is IBEP20, ContextSlave {
     using SafeMath for uint256;
 
     // Coin Parameters
@@ -112,9 +104,39 @@ contract CaritaCoinLight is IBEP20, Context {
 
     constructor () {
 
-        _allowances[address(this)][address(iRouter)] = type(uint128).max;
+        owner = msg.sender;
 
-        distributor = new DividendDistributor(address(iRouter));
+        _allowances[address(this)][address(iRouter)] = type(uint128).max;
+       
+        // Create Contracts
+
+        distributor = new DividendDistributor(ROUTER);
+        CharityVault charityVault = new CharityVault();
+        PreSale preSales = new PreSale();
+        distributorAddress = address(distributor);
+        charityVaultAddress = address(charityVault);
+        preSalesAddress = address(preSales);
+
+        // Set Interfaces
+
+        iPreSaleConfig = IPreSale(address(preSalesAddress));
+        iCharityVault = ICharityVault(charityVaultAddress);
+        
+        // Create Pair and Set Router
+
+        iRouter = IDEXRouter(ROUTER);
+        dexPair = IDEXFactory(iRouter.factory()).createPair(WBNB, address(this));
+
+        // Set Up UserManagement
+
+        UserManagement userManagement = new UserManagement();
+        userManagementAddress = address(userManagement);
+        iUserManagement = IUserManagement(userManagementAddress);
+        iPreSaleConfig.setUserManagementAddress(userManagementAddress);
+        iCharityVault.setUserManagementAddress(userManagementAddress);
+        iUserManagement.initialVariableEdition(dexPair, charityVaultAddress, preSalesAddress, distributorAddress);
+
+        // Fees Settings 
 
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;

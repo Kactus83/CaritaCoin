@@ -6,57 +6,31 @@ import "./Interfaces/IUserManagement.sol";
 import "./Interfaces/IDEXFactory+IDEXRouter.sol";
 import "./Interfaces/IBEP20.sol";
 import "./Interfaces/IConfig.sol";
+import "./Context.sol";
 
-contract PreSale {
+contract PreSale is ContextSlave {
     using SafeMath for uint256;
-
-
-    address public DEAD = 0x000000000000000000000000000000000000dEaD;
-    address public ZERO = 0x0000000000000000000000000000000000000000;
-    uint256 constant private MAX_INT = 2**256 - 1;
-
-    address public wbnbAddress;
-    address public tokenAddress;
-    address public pairAddress;
-    address public routerAddress;
-    address private userManagementAddress;
 
     uint tokensSold;
 
-    // Initialize Interfaces
-
-    IUserManagement USERMANAGEMENT = IUserManagement(userManagementAddress);
-    IDEXRouter ROUTER = IDEXRouter(routerAddress);
-    IBEP20 TOKEN = IBEP20(tokenAddress);
-    IBEP20 LPTOKEN = IBEP20(pairAddress);
-    IBEP20 WBNB = IBEP20(wbnbAddress);
-    IConfig iConfig = IConfig(tokenAddress);
-
     // Initialize Parameters
 
-    constructor () {
-        
-        tokenAddress = address(msg.sender);
-        iConfig = IConfig(msg.sender);
+    constructor() {
 
-        tokenAddress = iConfig.getTokenAddress();
-        wbnbAddress = iConfig.getWBNBAddress();
-        pairAddress = iConfig.getPairAddress();
-        routerAddress = iConfig.getRouterAddress();
-        userManagementAddress = iConfig.getUserManagementAddress();
+        TOKEN = address(msg.sender);
     }
 
     // Modifiers 
 
     modifier onlyToken() {
-        require(msg.sender == tokenAddress); _;
+        require(msg.sender == TOKEN); _;
     }
 
     // View Functions
     
     function getEstimatedTokenForBNB(uint256 buyAmountInWei) external view  returns (uint256) {
         uint256 bnbQuote;
-        bnbQuote = ROUTER.getAmountsOut(buyAmountInWei, getPathForWBNBToToken())[1];
+        bnbQuote = iRouter.getAmountsOut(buyAmountInWei, getPathForWBNBToToken())[1];
         return bnbQuote;
     }
 
@@ -66,14 +40,14 @@ contract PreSale {
 
     function getPathForWBNBToToken() internal view returns (address[] memory) {
         address[] memory path = new address[](2);
-        path[0] = wbnbAddress;
-        path[1] = tokenAddress;
+        path[0] = WBNB;
+        path[1] = TOKEN;
         
         return path;
     }
 
     function checkAmountValidity (uint buyAmountInWei) internal view returns(bool checkResult) {
-        try ROUTER.getAmountsOut(buyAmountInWei, getPathForWBNBToToken()) {
+        try iRouter.getAmountsOut(buyAmountInWei, getPathForWBNBToToken()) {
             checkResult = true;
             return checkResult;        
             }
@@ -88,58 +62,42 @@ contract PreSale {
     function CharityBuyForLiquidity() public payable {
         require(checkAmountValidity(msg.value) == true, "Amount is not valide");
 
-        uint amountOfToken = ROUTER.getAmountsOut(msg.value, getPathForWBNBToToken())[1];
+        uint amountOfToken = iRouter.getAmountsOut(msg.value, getPathForWBNBToToken())[1];
 
-        require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
+        require(iToken.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
 
         emit Sold(address(msg.sender), amountOfToken);
         tokensSold += amountOfToken;
 
-        require(TOKEN.transfer(address(msg.sender), amountOfToken));
-        USERMANAGEMENT.updateUserGiftStats(address(msg.sender), msg.value, amountOfToken);
+        require(iToken.transfer(address(msg.sender), amountOfToken));
+        iUserManagement.updateUserGiftStats(address(msg.sender), msg.value, amountOfToken);
     }
 
     function externalCharityBuyForLiquidity(address _sender, uint _amount) external {
         require(checkAmountValidity(_amount) == true, "Amount is not valide");
 
-        uint amountOfToken = ROUTER.getAmountsOut(_amount, getPathForWBNBToToken())[1];
+        uint amountOfToken = iRouter.getAmountsOut(_amount, getPathForWBNBToToken())[1];
 
-        require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
+        require(iToken.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
 
         emit Sold(_sender, amountOfToken);
         tokensSold += amountOfToken;
 
-        require(TOKEN.transfer(_sender, amountOfToken));
-        USERMANAGEMENT.updateUserGiftStats(address(_sender), _amount, amountOfToken);
+        require(iToken.transfer(_sender, amountOfToken));
+        iUserManagement.updateUserGiftStats(address(_sender), _amount, amountOfToken);
     }
 
     // Settings Functions
 
     function endSale(address _sender) external  onlyToken{
-        require(USERMANAGEMENT.isAuthorized(_sender) == true);
-        require(TOKEN.transfer(tokenAddress, TOKEN.balanceOf(address(this))));
+        require(iUserManagement.isAuthorized(_sender) == true);
+        require(iToken.transfer(TOKEN, iToken.balanceOf(address(this))));
 
         payable(msg.sender).transfer(address(this).balance);
     }
 
-    function changeToken (address _newTokenAddress, address _newPairAddress) external  onlyToken {
-        require(USERMANAGEMENT.isAuthorized(msg.sender) == true);
-        tokenAddress = _newTokenAddress;
-        pairAddress = _newPairAddress;
-    }
-
-    function changeRouter (address _newRouterAddress) external  onlyToken{
-        require(USERMANAGEMENT.isAuthorized(msg.sender) == true);
-        routerAddress = _newRouterAddress;
-    }
-
-    function refreshBaseSettings() external onlyToken {
-
-        tokenAddress = iConfig.getTokenAddress();
-        wbnbAddress = iConfig.getWBNBAddress();
-        pairAddress = iConfig.getPairAddress();
-        routerAddress = iConfig.getRouterAddress();
-        userManagementAddress = iConfig.getUserManagementAddress();
+    function setUserManagementAddress(address _newAddress) external onlyToken {
+        userManagementAddress = _newAddress;
     }
 
     // Events

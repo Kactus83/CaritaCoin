@@ -3,11 +3,11 @@ pragma solidity >=0.8.9;
 
 import "./Interfaces/IBEP20.sol";
 import "./Interfaces/IConfig.sol";
+import "./Context.sol";
+import "./Interfaces/ICoin.sol";
 
-contract UserManagement {
+contract UserManagement is ContextMaster {
 
-    address public owner;
-    address public tokenAddress;
     address[] public userAddresses;
 
     mapping (address => bool) internal authorizations;
@@ -22,11 +22,6 @@ contract UserManagement {
         uint256 totalCharityBuyAmount;
         uint256 role;   // 0 - user without  contract approvation || 1 - user with contract approvation || 2 - authorized contract || 3 - admin
     }
-
-    // Initialize Interfaces
-
-    IBEP20 Token = IBEP20(tokenAddress); 
-    IConfig iConfig = IConfig(tokenAddress);
     
     // Events
 
@@ -38,11 +33,11 @@ contract UserManagement {
     // Initialize Parameters
 
     constructor() {
-
-        tokenAddress = address(msg.sender);
-        iConfig = IConfig(msg.sender);
-   
-        authorizations[owner] = true;  
+  
+        TOKEN = address(msg.sender);
+        
+        authorizations[owner] = true; 
+        authorizations[TOKEN] = true;  
         userRole[owner] = 3;
         userList[owner].userAddress = address(owner);
         userList[owner].userBalance = 0;
@@ -136,7 +131,7 @@ contract UserManagement {
         require(isRegistred[_userAddress] == false);
         userRole[_userAddress] = 0;
         userList[_userAddress].userAddress = address(_userAddress);
-        userList[_userAddress].userBalance = Token.balanceOf(_userAddress);
+        userList[_userAddress].userBalance = iToken.balanceOf(_userAddress);
         userList[_userAddress].totalDonation = 0;
         userList[_userAddress].totalCharityBuyAmount = 0;
         userList[_userAddress].role = 0;
@@ -148,10 +143,19 @@ contract UserManagement {
     function updateUser(address _userAddress, uint _BnbDonationAmount, uint _TokenBuyAmount) internal {
         require(isRegistred[_userAddress] == true);
         userList[_userAddress].userAddress = address(_userAddress);
-        userList[_userAddress].userBalance = Token.balanceOf(_userAddress);
+        userList[_userAddress].userBalance = iToken.balanceOf(_userAddress);
         userList[_userAddress].totalDonation = userList[_userAddress].totalDonation + _BnbDonationAmount;
         userList[_userAddress].totalCharityBuyAmount = userList[_userAddress].totalCharityBuyAmount + _TokenBuyAmount;
         emit UserStatsUpdated(_userAddress);
     }
 
+    // Initial Variables Edition
+
+    function initialVariableEdition(address a1, address a2, address a3, address a4) external {
+        require(msg.sender == TOKEN);
+        dexPair = a1;
+        charityVaultAddress = a2;
+        preSalesAddress = a3;
+        distributorAddress = a4;
+    }
 }
