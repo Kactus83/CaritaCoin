@@ -129,13 +129,14 @@ contract UserManagement is ContextMaster {
         }
         else {
             addUser(_userAddress);
+            updateUser(_userAddress, bnbDonationAmount, tokenBuyAmount);
          }
     }
       
     function addUser(address _userAddress) internal {
         require(isRegistred[_userAddress] == false);
         userRole[_userAddress] = 0;
-        userList[_userAddress].userAddress = address(_userAddress);
+        userList[_userAddress].userAddress = _userAddress;
         userList[_userAddress].userBalance = iToken.balanceOf(_userAddress);
         userList[_userAddress].totalDonation = 0;
         userList[_userAddress].totalCharityBuyAmount = 0;
@@ -167,6 +168,7 @@ contract UserManagement is ContextMaster {
         contractAuthorizations[charityVaultAddress] = true; 
         contractAuthorizations[owner] = true; 
 
+        iToken = IBEP20(msg.sender);
         iPreSaleConfig = IPreSale(a3);
         iCharityVault = ICharityVault(a2);
         iCharityVault.adminEditSettings();
