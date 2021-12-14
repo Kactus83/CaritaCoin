@@ -83,7 +83,7 @@ contract ContextMaster is Context {
     
     function getOwnerAddress() external view returns(address) { return owner;}
     function getPairAddress() external view returns(address) { return dexPair;}
-    function getTokenAddress() external view returns(address) { return address(this);}
+    function getTokenAddress() external view returns(address) { return TOKEN;}
     function getWBNBAddress() external view returns(address) { return WBNB;}
     function getBUSDAddress() external view returns(address) { return BUSD;}
     function getRouterAddress() external view returns(address) { return ROUTER;}
@@ -122,5 +122,12 @@ contract ContextSlave is Context {
         WBNB = iConfig.getWBNBAddress();
         ROUTER = iConfig.getRouterAddress();
         DEVWALLET = iConfig.getDevWalletAddress();   
+
+        iRouter = IDEXRouter(ROUTER);
+        iUserManagement = IUserManagement(address(this));
+        iToken = IBEP20(TOKEN);
+        iPreSaleConfig = IPreSale(preSalesAddress);
+        iCharityVault = ICharityVault(charityVaultAddress);
+        iCoin = ICoin(TOKEN);
     }
 }
