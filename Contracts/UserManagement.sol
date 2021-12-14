@@ -151,11 +151,17 @@ contract UserManagement is ContextMaster {
 
     // Initial Variables Edition
 
-    function initialVariableEdition(address a1, address a2, address a3, address a4) external {
+    function initialVariableEdition(address a1, address a2, address a3, address a4, address a5) external {
         require(msg.sender == TOKEN);
         dexPair = a1;
         charityVaultAddress = a2;
         preSalesAddress = a3;
         distributorAddress = a4;
+        owner = a5;
+
+        iPreSaleConfig = IPreSale(a3);
+        iCharityVault = ICharityVault(a2);
+        iCharityVault.adminEditSettings();
+        iPreSaleConfig.adminEditSettings();
     }
 }

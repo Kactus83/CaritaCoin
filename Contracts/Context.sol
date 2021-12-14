@@ -60,10 +60,16 @@ contract ContextMaster is Context {
         preSalesAddress = _preSalesAddress;
         distributorAddress = _distributorAddress; 
 
+        pushNewVariablesToSalves(_ROUTER, _preSalesAddress, _TOKEN, _charityVaultAddress);
+
+    }
+
+    function pushNewVariablesToSalves(address _ROUTER, address _preSalesAddress, address _TOKEN, address _charityVaultAddress) public {
+
         iRouter = IDEXRouter(_ROUTER);
-        iPreSaleConfig = IPreSale(_preSalesAddress);
         iUserManagement = IUserManagement(address(this));
         iToken = IBEP20(_TOKEN);
+        iPreSaleConfig = IPreSale(_preSalesAddress);
         iCharityVault = ICharityVault(_charityVaultAddress);
         iCoin = ICoin(_TOKEN);
 

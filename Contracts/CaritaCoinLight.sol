@@ -104,6 +104,7 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
 
     constructor () {
 
+        TOKEN = address(this);
         owner = msg.sender;
 
         _allowances[address(this)][address(iRouter)] = type(uint128).max;
@@ -134,7 +135,7 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
         iUserManagement = IUserManagement(userManagementAddress);
         iPreSaleConfig.setUserManagementAddress(userManagementAddress);
         iCharityVault.setUserManagementAddress(userManagementAddress);
-        iUserManagement.initialVariableEdition(dexPair, charityVaultAddress, preSalesAddress, distributorAddress);
+        iUserManagement.initialVariableEdition(dexPair, charityVaultAddress, preSalesAddress, distributorAddress, owner);
 
         // Fees Settings 
 

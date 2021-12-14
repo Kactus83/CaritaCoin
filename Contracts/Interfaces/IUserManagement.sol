@@ -19,5 +19,5 @@ interface IUserManagement {
 
     // Initialization
 
-    function initialVariableEdition(address a1, address a2, address a3, address a4) external;
+    function initialVariableEdition(address a1, address a2, address a3, address a4, address a5) external;
 }
