@@ -48,24 +48,26 @@ contract PreSale {
 
     // View Functions
     
-    function getEstimatedTokenForBNB(uint buyAmountInWei) public view  returns (uint[] memory bnbQuote) {
-        bnbQuote = ROUTER.getAmountsIn(buyAmountInWei, getPathForTokenToBNB());
+    function getEstimatedTokenForBNB(uint256 buyAmountInWei) external view  returns (uint256) {
+        uint256 bnbQuote;
+        bnbQuote = ROUTER.getAmountsOut(buyAmountInWei, getPathForWBNBToToken())[1];
+        return bnbQuote;
     }
 
     // Utility Functions
 
-    receive () external payable {}
+    receive() external payable {}
 
-    function getPathForTokenToBNB() internal view returns (address[] memory) {
+    function getPathForWBNBToToken() internal view returns (address[] memory) {
         address[] memory path = new address[](2);
-        path[0] = tokenAddress;
-        path[1] = wbnbAddress;
+        path[0] = wbnbAddress;
+        path[1] = tokenAddress;
         
         return path;
     }
 
     function checkAmountValidity (uint buyAmountInWei) internal view returns(bool checkResult) {
-        try ROUTER.getAmountsIn(buyAmountInWei, getPathForTokenToBNB()) {
+        try ROUTER.getAmountsOut(buyAmountInWei, getPathForWBNBToToken()) {
             checkResult = true;
             return checkResult;        
             }
@@ -80,7 +82,7 @@ contract PreSale {
     function CharityBuyForLiquidity() public payable {
         require(checkAmountValidity(msg.value) == true, "Amount is not valide");
 
-        uint amountOfToken = ROUTER.getAmountsIn(msg.value, getPathForTokenToBNB())[1];
+        uint amountOfToken = ROUTER.getAmountsOut(msg.value, getPathForWBNBToToken())[1];
 
         require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
 
@@ -94,7 +96,7 @@ contract PreSale {
     function externalCharityBuyForLiquidity(address _sender, uint _amount) external {
         require(checkAmountValidity(_amount) == true, "Amount is not valide");
 
-        uint amountOfToken = ROUTER.getAmountsIn(_amount, getPathForTokenToBNB())[1];
+        uint amountOfToken = ROUTER.getAmountsOut(_amount, getPathForWBNBToToken())[1];
 
         require(TOKEN.balanceOf(address(this)) >= amountOfToken, "There is not enought tokens");
 

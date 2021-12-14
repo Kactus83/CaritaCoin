@@ -24,32 +24,48 @@ import "./libraries/SafeMath.sol";
 import "./UserManagement.sol";
 import "./PreSale.sol";
 import "./DividendDistributor.sol";
-import "./CharityVault.sol"
+import "./CharityVault.sol";
 
 import "./interfaces/IDEXFactory+IDEXRouter.sol";
 import "./interfaces/IBEP20.sol";
 import "./interfaces/IUserManagement.sol";
 
-
-contract CARITEST1 is IBEP20 {
-    using SafeMath for uint256;
+contract Context {
 
     // Constant Addresses & Parameters
 
-    address BUSD = 0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7;
-    address WBNB = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
-    address DEAD = 0x000000000000000000000000000000000000dEaD;
-    address ZERO = 0x0000000000000000000000000000000000000000;
+    address public owner;
+
+    address private BUSD = 0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7;
+    address private WBNB = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
+    address private DEAD = 0x000000000000000000000000000000000000dEaD;
+    address private ZERO = 0x0000000000000000000000000000000000000000;
+    address private ROUTER = 0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3;
+    address public DEVWALLET = 0xF53c251ACbfc7Df58A2f47F063af69A3ED897042;
 
     uint256 constant private MAX_INT = 2**256 - 1;
+
+
+    constructor() {
+    
+        owner = msg.sender;
+
+        userManagement = new UserManagement(msg.sender, address(this));
+        charityVault = new CharityVault();
+        preSales = new PreSale(address(this), WBNB, pair, address(ROUTER), address(userManagement));
+
+    }
+
+}
+
+contract CARITEST1 is IBEP20, Context {
+    using SafeMath for uint256;
 
     // Coin Parameters
 
     string constant _name = "CARITEST1";
     string constant _symbol = "CARITEST1";
     uint8 constant _decimals = 18;
-
-    address public owner;
 
     uint256 _totalSupply = 500000000000000 * (10 ** _decimals);
     uint256 public _maxTxAmount = _totalSupply / 10;
@@ -94,10 +110,6 @@ contract CARITEST1 is IBEP20 {
     uint256 autoBuybackBlockPeriod;
     uint256 autoBuybackBlockLast;
 
-    DividendDistributor distributor;
-    PreSale preSales;
-    UserManagement userManagement;
-
     uint256 distributorGas = 500000;
     uint256 feesGas = 70000;
 
@@ -106,20 +118,20 @@ contract CARITEST1 is IBEP20 {
     uint256 public swapThreshold = 5000000000 * (10 ** _decimals) * swapThresholdPerbillion;
     bool inSwap;
     modifier swapping() { inSwap = true; _; inSwap = false; }
+    
+    // Events
+
+    event AutoLiquify(uint256 amountBNB, uint256 amountBOG);
+    event BuybackMultiplierActive(uint256 duration);
 
     // Initialize Parameters
 
     constructor () {
-        router = IDEXRouter(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
+        router = IDEXRouter(ROUTER);
         pair = IDEXFactory(router.factory()).createPair(WBNB, address(this));
         _allowances[address(this)][address(router)] = type(uint128).max;
 
-        owner = msg.sender;
-
         distributor = new DividendDistributor(address(router));
-        userManagement = new UserManagement(msg.sender, address(this));
-        charityVault = new CharityVault();
-        preSales = new PreSale(address(this), WBNB, pair, address(router), address(userManagement));
 
         isFeeExempt[msg.sender] = true;
         isTxLimitExempt[msg.sender] = true;
@@ -133,7 +145,7 @@ contract CARITEST1 is IBEP20 {
         isDividendExempt[ZERO] = true;
 
         autoLiquidityReceiver = msg.sender;
-        marketingFeeReceiver = 0xF53c251ACbfc7Df58A2f47F063af69A3ED897042;
+        marketingFeeReceiver = DEVWALLET;
         charityVaultAddress = address(charityVault);
 
         uint preSalesBalance = _totalSupply / 10 * 7;
@@ -460,9 +472,4 @@ contract CARITEST1 is IBEP20 {
         emit Transfer(sender, recipient, amount);
         return true;
     }
-
-    // Events
-
-    event AutoLiquify(uint256 amountBNB, uint256 amountBOG);
-    event BuybackMultiplierActive(uint256 duration);
 }
