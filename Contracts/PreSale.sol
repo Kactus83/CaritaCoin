@@ -69,8 +69,7 @@ contract PreSale is ContextSlave {
     }
     
     function shouldBuyLiquidity() internal view returns(bool) {
-        IBEP20 iWBNB = IBEP20(WBNB);
-        if(liquidyBuyThreshold <= iWBNB.balanceOf(address(this))) {
+        if(liquidyBuyThreshold <= address(this).balance) {
             return true;
         }
         else {
