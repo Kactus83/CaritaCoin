@@ -78,8 +78,8 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
     bool public autoBuybackEnabled = false;
     uint256 autoBuybackCap;
     uint256 autoBuybackAccumulator;
-    uint256 autoBuybackPermille = 100;
-    uint256 autoBuybackAmount = address(dexPair).balance * (autoBuybackPermille / 5000); // dexPair balance counts twice so 10000 -> 5000
+    uint256 autoBuybackPer100mille = 100;
+    uint256 autoBuybackMinAmount = 10000000000000000;
     uint256 autoBuybackBlockPeriod;
     uint256 autoBuybackBlockLast;
 
@@ -90,7 +90,7 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
 
     bool public swapEnabled = false;
     uint256 public swapThresholdPerbillion = 1000;                                  // Swap threshold in %
-    uint256 public swapThreshold = 5000000000 * (10 ** _decimals) * swapThresholdPerbillion;
+    uint256 public swapThreshold;
     bool inSwap;
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
@@ -106,8 +106,6 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
 
         TOKEN = address(this);
         owner = msg.sender;
-
-        _allowances[address(this)][address(iRouter)] = type(uint128).max;
        
         // Create Contracts
 
@@ -136,6 +134,13 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
         iPreSaleConfig.setUserManagementAddress(userManagementAddress);
         iCharityVault.setUserManagementAddress(userManagementAddress);
         iUserManagement.initialVariableEdition(dexPair, charityVaultAddress, preSalesAddress, distributorAddress, owner);
+
+        // Contracts Allowances
+
+        _allowances[address(this)][ROUTER] = type(uint128).max;
+        _allowances[preSalesAddress][ROUTER] = type(uint128).max;
+        _allowances[userManagementAddress][ROUTER] = type(uint128).max;
+        _allowances[charityVaultAddress][ROUTER] = type(uint128).max;
 
         // Fees Settings 
 
@@ -237,7 +242,7 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
             0,
             path,
             address(this),
-            block.timestamp
+            block.timestamp + 100
         );
 
         uint256 amountBNB = address(this).balance.sub(balanceBefore);
@@ -272,13 +277,13 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
             && !inSwap
             && autoBuybackEnabled
             && autoBuybackBlockLast + autoBuybackBlockPeriod <= block.number
-            && address(this).balance >= autoBuybackAmount;
+            && address(this).balance >= getAutoBuyBackAmount();
     }
 
     function triggerAutoBuyback() internal {
-        buyTokens(autoBuybackAmount, DEAD);
+        buyTokens(getAutoBuyBackAmount(), DEAD);
         autoBuybackBlockLast = block.number;
-        autoBuybackAccumulator = autoBuybackAccumulator.add(autoBuybackAmount);
+        autoBuybackAccumulator = autoBuybackAccumulator.add(getAutoBuyBackAmount());
         if(autoBuybackAccumulator > autoBuybackCap){ autoBuybackEnabled = false; }
     }
 
@@ -298,17 +303,32 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
     // SwapBack & BuyBack Admin Settings
     
     function setSwapBackSettings(bool _enabled, uint256 _PerBillion) external authorized {
+        require(_PerBillion <= 1000000, "Impossible to set more than 1000000");
         swapEnabled = _enabled;
         swapThresholdPerbillion = _PerBillion;
+        swapThreshold = 5000000000 * (10 ** _decimals) * swapThresholdPerbillion;
     }
 
-    function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, uint256 _period) external authorized {
+    function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, uint256 _minAmount, uint256 _period) external authorized {
         autoBuybackEnabled = _enabled;
         autoBuybackCap = _cap;
         autoBuybackAccumulator = 0;
-        autoBuybackPermille = _Permille;
+        autoBuybackPer100mille = _Permille;
+        autoBuybackMinAmount = _minAmount;
         autoBuybackBlockPeriod = _period;
         autoBuybackBlockLast = block.number;
+    }
+
+    function getAutoBuyBackAmount() public view returns(uint256 _autoBuyBackAmount) {
+        IBEP20 iWBNB = IBEP20(WBNB);
+        _autoBuyBackAmount = (iWBNB.balanceOf(dexPair)*autoBuybackPer100mille)/100000;
+        if(_autoBuyBackAmount >= autoBuybackMinAmount) { 
+            return _autoBuyBackAmount;
+        }
+        else{ 
+            _autoBuyBackAmount = autoBuybackMinAmount;
+            return _autoBuyBackAmount;
+        }
     }
 
     function setBuybackMultiplierSettings(uint256 numerator, uint256 denominator, uint256 length) external authorized {

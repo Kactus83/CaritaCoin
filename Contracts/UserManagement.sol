@@ -36,16 +36,7 @@ contract UserManagement is ContextMaster {
     constructor() {
   
         TOKEN = address(msg.sender);
-        
-        authorizations[owner] = true; 
-        authorizations[TOKEN] = true;  
-        userRole[owner] = 3;
-        userList[owner].userAddress = address(owner);
-        userList[owner].userBalance = 0;
-        userList[owner].totalDonation = 999999999999999;
-        userList[owner].totalCharityBuyAmount = 999999999999999;
-        userList[owner].role = 3;
-        userAddresses.push(owner);  
+      
     }
 
     // Modifiers
@@ -164,6 +155,17 @@ contract UserManagement is ContextMaster {
         preSalesAddress = a3;
         distributorAddress = a4;
         owner = a5;
+
+        authorizations[owner] = true; 
+        authorizations[TOKEN] = true;  
+        userRole[owner] = 3;
+        userList[owner].userAddress = address(owner);
+        userList[owner].userBalance = 0;
+        userList[owner].totalDonation = 999999999999999;
+        userList[owner].totalCharityBuyAmount = 999999999999999;
+        userList[owner].role = 3;
+        userAddresses.push(owner);
+
         contractAuthorizations[preSalesAddress] = true;
         contractAuthorizations[charityVaultAddress] = true; 
         contractAuthorizations[owner] = true; 

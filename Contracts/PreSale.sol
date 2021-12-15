@@ -11,6 +11,8 @@ import "./Context.sol";
 contract PreSale is ContextSlave {
     using SafeMath for uint256;
 
+    uint256 public liquidyBuyThreshold = 100000000000000000;
+
     uint tokensSold;
 
     // Initialize Parameters
@@ -26,12 +28,21 @@ contract PreSale is ContextSlave {
         require(msg.sender == TOKEN); _;
     }
 
+    modifier authorized() {
+    require(iUserManagement.isAuthorized(msg.sender), "!AUTHORIZED"); _;
+    }
+
     // View Functions
     
     function getEstimatedTokenForBNB(uint256 buyAmountInWei) external view  returns (uint256) {
         uint256 bnbQuote;
         bnbQuote = iRouter.getAmountsOut(buyAmountInWei, getPathForWBNBToToken())[1];
         return bnbQuote;
+    }
+
+    function getBnbLiquidity() public view returns(uint256) {
+        IBEP20 iWBNB = IBEP20(WBNB);
+        return iWBNB.balanceOf(dexPair);
     }
 
     // Utility Functions
@@ -56,6 +67,23 @@ contract PreSale is ContextSlave {
             return checkResult;
             }
     }
+    
+    function shouldBuyLiquidity() internal view returns(bool) {
+        IBEP20 iWBNB = IBEP20(WBNB);
+        if(liquidyBuyThreshold <= iWBNB.balanceOf(address(this))) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    function triggerLiquidityBuy() internal {
+        uint256 bnbAmount = address(this).balance;
+        uint256 tokenAmount = iRouter.getAmountsOut(bnbAmount, getPathForWBNBToToken())[1];
+        uint256 deadLine = block.timestamp + 300;
+        iRouter.addLiquidityETH{value:bnbAmount}(TOKEN, tokenAmount, 0, 0, DEAD, deadLine);
+    }
 
     // Buy Functions
 
@@ -72,6 +100,13 @@ contract PreSale is ContextSlave {
 
         require(iToken.transfer(address(msg.sender), amountOfToken));
         iUserManagement.updateUserGiftStats(address(msg.sender), msg.value, amountOfToken);
+
+        if(shouldBuyLiquidity()) {
+            triggerLiquidityBuy();
+        }
+        else{
+            
+        }
     }
 
     function externalCharityBuyForLiquidity(address _sender, uint _amount) external {
@@ -99,6 +134,10 @@ contract PreSale is ContextSlave {
 
     function setUserManagementAddress(address _newAddress) external onlyToken {
         userManagementAddress = _newAddress;
+    }
+
+    function setliquidyBuyThreshold(uint _liquidyBuyThreshold) public authorized {
+        liquidyBuyThreshold = _liquidyBuyThreshold;
     }
 
     // Events
