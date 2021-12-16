@@ -89,8 +89,9 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
     uint256 feesGas = 70000;
 
     bool public swapEnabled = false;
-    uint256 public swapThresholdPerbillion = 1000;                                  // Swap threshold in %
+    uint256 public swapThresholdPerbillion = 1000;                                  // Swap threshold in %%%%% of BNB Liquidity Pair
     uint256 public swapThreshold;
+    uint256 public minSwapAmountInWei;
     bool inSwap;
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
@@ -220,13 +221,15 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
     }
 
     function shouldSwapBack() internal view returns (bool) {
+        uint256 _swapThreshold = get_SwapThreshold();
         return msg.sender != dexPair
         && !inSwap
         && swapEnabled
-        && _balances[address(this)] >= swapThreshold;
+        && _balances[address(this)] >= _swapThreshold;
     }
 
     function swapBack() internal swapping {
+        updateSwapThreshold();
         uint256 dynamicLiquidityFee = isOverLiquified(targetLiquidity, targetLiquidityDenominator) ? 0 : liquidityFee;
         uint256 amountToLiquify = swapThreshold.mul(dynamicLiquidityFee).div(totalFee).div(2);
         uint256 amountToSwap = swapThreshold.sub(amountToLiquify);
@@ -270,6 +273,7 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
             );
             emit AutoLiquify(amountBNBLiquidity, amountToLiquify);
         }
+        updateSwapThreshold();
     }
 
     function shouldAutoBuyback() internal view returns (bool) {
@@ -302,11 +306,13 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
 
     // SwapBack & BuyBack Admin Settings
     
-    function setSwapBackSettings(bool _enabled, uint256 _PerBillion) external authorized {
+    function setSwapBackSettings(bool _enabled, uint256 _PerBillion, uint256 _minAmount) external authorized {
         require(_PerBillion <= 1000000, "Impossible to set more than 1000000");
+        require(_PerBillion >= 1, "Can't be 0. Must be turned off");
         swapEnabled = _enabled;
         swapThresholdPerbillion = _PerBillion;
-        swapThreshold = 5000000000 * (10 ** _decimals) * swapThresholdPerbillion;
+        swapThreshold = (getWbnbLiquidity() * swapThresholdPerbillion)/1000000;
+        minSwapAmountInWei = _minAmount;
     }
 
     function setAutoBuybackSettings(bool _enabled, uint256 _cap, uint256 _Permille, uint256 _minAmount, uint256 _period) external authorized {
@@ -317,6 +323,10 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
         autoBuybackMinAmount = _minAmount;
         autoBuybackBlockPeriod = _period;
         autoBuybackBlockLast = block.number;
+    }
+    
+    function updateSwapThreshold() internal {
+        swapThreshold = get_SwapThreshold();
     }
 
     function getAutoBuyBackAmount() public view returns(uint256 _autoBuyBackAmount) {
@@ -422,6 +432,21 @@ contract CaritaCoinLight is IBEP20, ContextSlave {
 
     function getCirculatingSupply() public view returns (uint256) {
         return _totalSupply.sub(balanceOf(DEAD)).sub(balanceOf(ZERO));
+    }
+
+    function getWbnbLiquidity() public view returns (uint256) {
+        return dexPair.balance;
+    }
+
+    function get_SwapThreshold() public view returns(uint256 _swapThreshold) {
+        _swapThreshold = (getWbnbLiquidity() * swapThresholdPerbillion)/1000000;
+        if(_swapThreshold <= minSwapAmountInWei) {
+            _swapThreshold = minSwapAmountInWei;
+            return _swapThreshold;
+        }
+        else{
+            return _swapThreshold;
+        }
     }
 
     function getLiquidityBacking(uint256 accuracy) public view returns (uint256) {
